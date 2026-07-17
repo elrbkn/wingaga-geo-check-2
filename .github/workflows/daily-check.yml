@@ -2,9 +2,7 @@ name: Daily Geo Registration Check
 
 on:
   schedule:
-    # Запуск каждый день в 8:00 и 20:00 по UTC (можно настроить по своему времени)
-    - cron: '0 8,20 * * *'
-  # Для отладки можно запускать вручную через кнопку "Run workflow"
+    - cron: '0 8,15 * * *'
   workflow_dispatch:
 
 jobs:
