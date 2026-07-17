@@ -1,0 +1,20 @@
+{
+  "name": "wingaga-geo-check",
+  "version": "1.0.0",
+  "description": "Ежедневная проверка доступности регистрации WinGaga по списку гео",
+  "private": true,
+  "scripts": {
+    "test": "npx patchright test",
+    "test:headed": "npx patchright test --headed",
+    "report": "npx patchright show-report reports/html-report",
+    "daily-check": "node scripts/run-daily-check.js"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "^8.4.1",
+    "dotenv": "^16.4.5"
+  },
+  "dependencies": {
+    "patchright": "^1.61.1",
+    "undici": "^8.7.0"
+  }
+}

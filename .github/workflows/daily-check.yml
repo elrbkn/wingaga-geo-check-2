@@ -1,0 +1,54 @@
+name: Daily registration geo-check
+
+on:
+  schedule:
+    # Каждый день в 08:00 UTC. Формат: минута час день месяц день-недели
+    - cron: '0 8 * * *'
+  workflow_dispatch: {} # позволяет запустить вручную кнопкой "Run workflow" на GitHub
+
+jobs:
+  registration-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Install virtual display (xvfb)
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+        # Тест теперь запускается в headed-режиме (headless: false) —
+        # это помогает пройти Cloudflare Turnstile, которому нужен настоящий
+        # WebGL-контекст. На сервере без монитора для этого нужен виртуальный
+        # дисплей - его и даёт xvfb-run ниже.
+
+      - name: Run registration check
+        env:
+          SOAX_HOST: proxy.soax.com
+          SOAX_PORT: 5000
+          SOAX_LOGIN_PREFIX: package-346398-country
+          SOAX_LOGIN_SUFFIX: opt-lookalike
+          SOAX_PASSWORD: ${{ secrets.SOAX_PASSWORD }}
+          REGISTRATION_URL: ${{ secrets.REGISTRATION_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: xvfb-run --auto-servernum npx playwright test
+        continue-on-error: true # чтобы отчёт всё равно сохранился, даже если найден блок
+
+      - name: Upload report as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: registration-report-${{ github.run_number }}
+          path: reports/
+          retention-days: 30
