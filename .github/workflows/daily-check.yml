@@ -26,10 +26,14 @@ jobs:
         run: npm ci
 
       # 4. Устанавливаем браузеры для Patchright/Playwright
-      - name: Install browsers
-        run: npx patchright install
+      - name: Install browsers with OS dependencies
+        run: npx patchright install --with-deps chromium
 
-      # 5. Создаём файл .env из секретов GitHub
+      # 5. Устанавливаем шрифты
+      - name: Install fonts
+        run: sudo apt-get update && sudo apt-get install -y fonts-liberation fonts-noto-core
+
+      # 6. Создаём файл .env из секретов GitHub
       - name: Create .env file
         run: |
           echo "SOAX_HOST=${{ secrets.SOAX_HOST }}" >> .env
@@ -42,11 +46,11 @@ jobs:
           echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> .env
           echo "TELEGRAM_PROXY_URL=${{ secrets.TELEGRAM_PROXY_URL }}" >> .env
 
-      # 6. Запускаем тесты через ваш скрипт run-daily-check.js
+      # 7. Запускаем тесты через ваш скрипт run-daily-check.js
       - name: Run tests
         run: node scripts/run-daily-check.js
 
-      # 7. Сохраняем отчёты как артефакты (опционально)
+      # 8. Сохраняем отчёты как артефакты (опционально)
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4

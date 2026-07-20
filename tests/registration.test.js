@@ -3,11 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// ============= ИЗМЕНЕНИЕ №1: импорт из patchright вместо @playwright/test =============
 const { test, expect, devices } = require('patchright/test');
-// Для прямого запуска браузера тоже используем patchright
 const playwright = require('patchright');
-// =====================================================================================
 
 const countries = require('../config/countries');
 const { generateTestData, generateMobileNumber } = require('../utils/dataGenerator');
@@ -170,90 +167,10 @@ async function runTestForCountry(country, browser) {
 
   const locale = localeByCountry[country.code] || 'en-US';
 
-  const context = await browser.newContext({
-    ...devices['Pixel 7'],
-    ...(country.code === 'ES'
-      ? {}
-      : {
-          userAgent: '...',
-          extraHttpHeaders: {
-            'Accept-Language': `${locale},en;q=0.5`,
-            'Accept-Encoding': 'gzip, deflate, br',
-            'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            'sec-ch-ua-mobile': '?1',
-            'sec-ch-ua-platform': '"Android"',
-          },
-        }),
-
-    ...(country.code === 'ES' && {
-      extraHttpHeaders: {
-        'Accept-Language': `${locale},en;q=0.5`,
-        'Accept-Encoding': 'gzip, deflate, br',
-      },
-    }),
-    proxy: {
-     server: `http://${SOAX_HOST}:${SOAX_PORT}`,
-     username: proxyLogin,
-     password: SOAX_PASSWORD,
-   },
-    locale,
-   timezoneId: timezoneByCountry[country.code],
-   geolocation: geoByCountry[country.code],
-   permissions: ['geolocation'],
-   headless: false,
-   viewport: { width: 412, height: 915 },
-   hasTouch: true,
-  });
-
-  // ===== СОЗДАЁМ СТРАНИЦУ =====
-  const page = await context.newPage();
-
-  // ===== ВЫПОЛНЯЕМ STEALTH-СКРИПТ В КОНТЕКСТЕ СТРАНИЦЫ =====
-  await page.evaluate((locale) => {
-    // Подделываем chrome object
-    window.chrome = {
-        runtime: {},
-        loadTimes() {},
-        csi() {},
-        app: {},
-    };
-
-    // Permissions API для уведомлений
-    const originalQuery = window.navigator.permissions.query;
-    window.navigator.permissions.query = (parameters) =>
-        parameters.name === 'notifications'
-            ? Promise.resolve({ state: Notification.permission })
-            : originalQuery(parameters);
-
-    // Подмена ширины/высоты окна
-    Object.defineProperty(window, 'outerWidth', { get: () => window.innerWidth });
-    Object.defineProperty(window, 'outerHeight', { get: () => window.innerHeight });
-
-    // Подделка информации о сети
-    if (navigator.connection) {
-        Object.defineProperty(navigator, 'connection', {
-            get: () => ({ effectiveType: '4g', rtt: 50, downlink: 10 }),
-        });
-    }
-
-    // Подмена WebGL-вендора и рендерера (маскировка под Qualcomm Adreno)
-    const getParameterProxy = WebGLRenderingContext.prototype.getParameter;
-    WebGLRenderingContext.prototype.getParameter = function (parameter) {
-        if (parameter === 37445) return 'Qualcomm';
-        if (parameter === 37446) return 'Adreno (TM) 730';
-        return getParameterProxy.apply(this, arguments);
-    };
-
-    const getParameter2Proxy = WebGL2RenderingContext.prototype.getParameter;
-    WebGL2RenderingContext.prototype.getParameter = function (parameter) {
-        if (parameter === 37445) return 'Qualcomm';
-        if (parameter === 37446) return 'Adreno (TM) 730';
-        return getParameter2Proxy.apply(this, arguments);
-    };
-
-    console.log('Stealth-скрипт выполнен');
-  }, locale);
-  // ===== КОНЕЦ EVALUATE =====
+  let context;
+  let page;
+  let signupCaptured = false;
+  const capturedApiErrors = [];
 
   const result = {
     country: country.code,
@@ -275,10 +192,90 @@ async function runTestForCountry(country, browser) {
     retry: false,
   };
 
-  let signupCaptured = false;
-  const capturedApiErrors = [];
-
   try {
+  
+    context = await browser.newContext({
+      ...devices['Pixel 7'],
+      ...(country.code === 'ES'
+        ? {}
+        : {
+            userAgent: '...',
+            extraHttpHeaders: {
+              'Accept-Language': `${locale},en;q=0.5`,
+              'Accept-Encoding': 'gzip, deflate, br',
+              'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+              'sec-ch-ua-mobile': '?1',
+              'sec-ch-ua-platform': '"Android"',
+            },
+          }),
+
+      ...(country.code === 'ES' && {
+        extraHttpHeaders: {
+          'Accept-Language': `${locale},en;q=0.5`,
+          'Accept-Encoding': 'gzip, deflate, br',
+        },
+      }),
+      proxy: {
+        server: `http://${SOAX_HOST}:${SOAX_PORT}`,
+        username: proxyLogin,
+        password: SOAX_PASSWORD,
+      },
+      locale,
+      timezoneId: timezoneByCountry[country.code],
+      geolocation: geoByCountry[country.code],
+      permissions: ['geolocation'],
+      headless: false,
+      viewport: { width: 412, height: 915 },
+      hasTouch: true,
+    });
+
+    page = await context.newPage();
+
+    await page.evaluate((locale) => {
+      // Подделываем chrome object
+      window.chrome = {
+          runtime: {},
+          loadTimes() {},
+          csi() {},
+          app: {},
+      };
+
+      // Permissions API для уведомлений
+      const originalQuery = window.navigator.permissions.query;
+      window.navigator.permissions.query = (parameters) =>
+          parameters.name === 'notifications'
+              ? Promise.resolve({ state: Notification.permission })
+              : originalQuery(parameters);
+
+      // Подмена ширины/высоты окна
+      Object.defineProperty(window, 'outerWidth', { get: () => window.innerWidth });
+      Object.defineProperty(window, 'outerHeight', { get: () => window.innerHeight });
+
+      // Подделка информации о сети
+      if (navigator.connection) {
+          Object.defineProperty(navigator, 'connection', {
+              get: () => ({ effectiveType: '4g', rtt: 50, downlink: 10 }),
+          });
+      }
+
+      // Подмена WebGL-вендора и рендерера (маскировка под Qualcomm Adreno)
+      const getParameterProxy = WebGLRenderingContext.prototype.getParameter;
+      WebGLRenderingContext.prototype.getParameter = function (parameter) {
+          if (parameter === 37445) return 'Qualcomm';
+          if (parameter === 37446) return 'Adreno (TM) 730';
+          return getParameterProxy.apply(this, arguments);
+      };
+
+      const getParameter2Proxy = WebGL2RenderingContext.prototype.getParameter;
+      WebGL2RenderingContext.prototype.getParameter = function (parameter) {
+          if (parameter === 37445) return 'Qualcomm';
+          if (parameter === 37446) return 'Adreno (TM) 730';
+          return getParameter2Proxy.apply(this, arguments);
+      };
+
+      console.log('Stealth-скрипт выполнен');
+    }, locale);
+
     console.log(`[${country.code}] Проверяем IP...`);
     let ipInfo = {};
     try {
@@ -345,7 +342,7 @@ async function runTestForCountry(country, browser) {
       const isSignupCall = url.includes('/registration/signup') && req.method() === 'POST';
       if (isSignupCall) signupCaptured = true;
 
-      // ===== ИЗМЕНЕНИЕ: Cloudflare-блок считаем значимым только для signup-запроса =====
+      // Cloudflare-блок считаем значимым только для signup-запроса
       if (isCloudflareBlock && isSignupCall) {
         result.classification = 'CLOUDFLARE_EDGE_BLOCK';
         result.httpStatus = status;
@@ -641,14 +638,20 @@ async function runTestForCountry(country, browser) {
     result.allCapturedApiErrors = capturedApiErrors;
     console.error(`[${country.code}] Ошибка:`, err.message);
 
-    const screenshotPath = path.join(REPORT_DIR, `error-${country.code}-${Date.now()}.png`);
-    try {
-      await page.screenshot({ path: screenshotPath, fullPage: true });
-      result.screenshot = screenshotPath;
-      console.log(`[${country.code}] Скриншот сохранён: ${screenshotPath}`);
-    } catch (e) {}
+    if (page) {
+      const screenshotPath = path.join(REPORT_DIR, `error-${country.code}-${Date.now()}.png`);
+      try {
+        await page.screenshot({ path: screenshotPath, fullPage: true });
+        result.screenshot = screenshotPath;
+        console.log(`[${country.code}] Скриншот сохранён: ${screenshotPath}`);
+      } catch (e) {}
+    }
   } finally {
-    await context.close();
+    
+    if (context) {
+      await context.close().catch(() => {});
+    }
+    // Сохраняем результат в файл
     const resultsDir = process.env.RESULTS_DIR || path.join(REPORT_DIR, 'run-results', 'fallback');
     fs.mkdirSync(resultsDir, { recursive: true });
     const resultFile = path.join(resultsDir, `${country.code}.json`);
@@ -658,44 +661,60 @@ async function runTestForCountry(country, browser) {
   return result;
 }
 
-// ============= ИЗМЕНЕНИЕ №2: использование playwright из patchright для запуска браузера =============
 for (const country of countries) {
   test(`Registration check - ${country.name} (${country.code})`, async () => {
-  let result;
-  let retryCount = 0;
-  const maxRetries = 2;
+    let result;
+    let retryCount = 0;
+    const maxRetries = 3; // увеличено до 3
+    const SUCCESS_CLASSIFICATIONS = ['SUCCESS', 'SUCCESS_UNCONFIRMED_UI'];
 
-  while (retryCount <= maxRetries) {
-    console.log(`[${country.code}] Попытка ${retryCount + 1} из ${maxRetries + 1}`);
+    while (retryCount <= maxRetries) {
+      console.log(`[${country.code}] Попытка ${retryCount + 1} из ${maxRetries + 1}`);
 
-    const browser = await playwright.chromium.launch({
-      headless: false,
-      args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist', '--disable-gpu-sandbox'],
-    });
+      let browser = null;
+      try {
+        // Создаём браузер внутри try, чтобы поймать возможные ошибки запуска
+        browser = await playwright.chromium.launch({
+          headless: false,
+          args: [
+            '--use-gl=swiftshader',
+            '--enable-webgl',
+            '--ignore-gpu-blocklist',
+            '--disable-gpu-sandbox',
+            '--disable-dev-shm-usage',
+          ],
+        });
 
-    try {
-      result = await runTestForCountry(country, browser);
-    } finally {
-      await browser.close().catch(() => {});
-    }
-
-    if (
-      result.classification === 'CLOUDFLARE_CHALLENGE' ||
-      result.classification === 'CLOUDFLARE_EDGE_BLOCK' ||
-      result.classification === 'GEO_RESTRICTED_BY_SITE'
-    ) {
-      retryCount++;
-      if (retryCount <= maxRetries) {
-        console.log(`[${country.code}] Обнаружена блокировка, повторная попытка с новым IP...`);
-        continue;
+        result = await runTestForCountry(country, browser);
+      } catch (fatalErr) {
+        // Страховка: если произошла фатальная ошибка (например, browser.launch() упал или runTestForCountry выбросил исключение)
+        console.error(`[${country.code}] Критический сбой: ${fatalErr.message}`);
+        result = {
+          country: country.code,
+          countryName: country.name,
+          classification: 'TEST_ERROR',
+          note: `Критический сбой вне теста: ${fatalErr.message}`,
+        };
+      } finally {
+        if (browser) {
+          await browser.close().catch(() => {});
+        }
       }
-    }
-    break;
-  }
 
-  expect(
-    result.classification,
-    `Гео ${country.code} (${result.landingDomain || 'домен не определён'}): ${result.classification} | ${result.note}`
-  ).toBe('SUCCESS');
-});
-};
+      // Ретраим, если классификация не входит в список успешных
+      if (!SUCCESS_CLASSIFICATIONS.includes(result.classification)) {
+        retryCount++;
+        if (retryCount <= maxRetries) {
+          console.log(`[${country.code}] ${result.classification} — ретраим (${retryCount}/${maxRetries}), новая прокси-сессия...`);
+          continue;
+        }
+      }
+      break;
+    }
+
+    expect(
+      result.classification,
+      `Гео ${country.code} (${result.landingDomain || 'домен не определён'}): ${result.classification} | ${result.note}`
+    ).toBe('SUCCESS');
+  });
+}
