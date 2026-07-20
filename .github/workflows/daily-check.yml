@@ -30,8 +30,8 @@ jobs:
         run: npx patchright install --with-deps chromium
 
       # 5. Устанавливаем шрифты
-      - name: Install fonts
-        run: sudo apt-get update && sudo apt-get install -y fonts-liberation fonts-noto-core
+      - name: Install Xvfb and fonts
+        run: sudo apt-get update && sudo apt-get install -y xvfb fonts-liberation fonts-noto-core
 
       # 6. Создаём файл .env из секретов GitHub
       - name: Create .env file
@@ -48,7 +48,7 @@ jobs:
 
       # 7. Запускаем тесты через ваш скрипт run-daily-check.js
       - name: Run tests
-        run: node scripts/run-daily-check.js
+        run: xvfb-run -a --server-args="-screen 0 1280x1024x24" node scripts/run-daily-check.js
 
       # 8. Сохраняем отчёты как артефакты (опционально)
       - name: Upload reports
