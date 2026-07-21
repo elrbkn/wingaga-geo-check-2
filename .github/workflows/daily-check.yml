@@ -2,7 +2,8 @@ name: Daily Geo Registration Check
 
 on:
   schedule:
-    - cron: '0 8,15 * * *'
+    - cron: '13 7 * * *'   # 10:13
+    - cron: '47 14 * * *'  # 17:47
   workflow_dispatch:
 
 jobs:
