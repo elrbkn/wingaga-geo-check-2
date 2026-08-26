@@ -25,6 +25,6 @@ const SUBSCRIBERS_FILE = path.join(__dirname, 'state', 'subscribers.json');
   console.log('После сохранения:', { chatIds, lastUpdateId });
 
   console.log('--- 3. Пробуем разослать тестовое сообщение ---');
-  const results = await broadcastTelegramMessage(auth, '🧪 Тестовая рассылка из test-subscribers.js', chatIds.length ? chatIds : [process.env.TELEGRAM_CHAT_ID]);
+  const results = await broadcastTelegramMessage(auth, '🧪 Тестовая рассылка из test-subscribers', chatIds.length ? chatIds : [process.env.TELEGRAM_CHAT_ID]);
   console.log('Результаты рассылки:', results);
 })().catch(e => console.error('Ошибка:', e.response?.data || e.message));

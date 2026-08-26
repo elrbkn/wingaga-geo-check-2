@@ -173,9 +173,9 @@ async function sendTelegram() {
   //    "забыл"), поэтому всегда добавляем его в получателей явно, а не только
   //    как запасной вариант на случай пустого списка.
   const recipients = [...new Set([
-    ...chatIds,
-    ...(TELEGRAM_CHAT_ID ? [TELEGRAM_CHAT_ID] : []),
-  ])]
+    ...chatIds.map(String),
+    ...(TELEGRAM_CHAT_ID ? [String(TELEGRAM_CHAT_ID)] : []),
+  ])];
 
   if (recipients.length === 0) {
     console.warn('⚠️ Список получателей пуст – сообщение не отправлено');
