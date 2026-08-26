@@ -47,6 +47,11 @@ console.log(`Отчёт сохранён: ${reportPath}`);
 
 // Формируем текст для Telegram
 const { TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_PROXY_URL } = process.env;
+const { loadSubscribers, saveSubscribers } = require('../utils/subscribers');
+const { broadcastTelegramMessage, fetchNewStarts } = require('../utils/telegram');
+
+const SUBSCRIBERS_FILE = path.join(__dirname, '..', 'state', 'subscribers.json');
+
 const emoji = {
   SUCCESS: '✅',
   SUCCESS_UNCONFIRMED_UI: '⚠️',
@@ -141,43 +146,44 @@ const text =
 
 // Асинхронная отправка с ожиданием
 async function sendTelegram() {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
+  if (!TELEGRAM_BOT_TOKEN) {
     console.warn('⚠️ Telegram не настроен – сообщение не отправлено');
     return;
   }
 
+  const auth = { botToken: TELEGRAM_BOT_TOKEN, proxyUrl: TELEGRAM_PROXY_URL };
+
+  // 1. Подтягиваем новых подписчиков (тех, кто написал /start с прошлого раза)
+  let { chatIds, lastUpdateId } = loadSubscribers(SUBSCRIBERS_FILE);
   try {
-    const fetchOptions = {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text, parse_mode: 'HTML' }),
-    };
-
-    let tgFetch = fetch;
-    if (TELEGRAM_PROXY_URL) {
-      let undici;
-      try {
-        undici = require('undici');
-      } catch (e) {
-        console.error('❌ Модуль undici не установлен. Установите его: npm install undici');
-        process.exit(1);
-      }
-      const { ProxyAgent, fetch: undiciFetch } = undici;
-      fetchOptions.dispatcher = new ProxyAgent(TELEGRAM_PROXY_URL);
-      tgFetch = undiciFetch;
+    const { newChatIds, maxUpdateId } = await fetchNewStarts(auth, lastUpdateId);
+    if (newChatIds.length > 0) {
+      console.log(`🆕 Новые подписчики: ${newChatIds.join(', ')}`);
+      chatIds = [...new Set([...chatIds, ...newChatIds])];
     }
-
-    const response = await tgFetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, fetchOptions);
-    if (response.ok) {
-      console.log('✅ Отчёт отправлен в Telegram');
-    } else {
-      const errorBody = await response.text();
-      console.error(`❌ Ошибка при отправке: HTTP ${response.status} - ${errorBody}`);
-    }
+    lastUpdateId = maxUpdateId;
+    saveSubscribers(SUBSCRIBERS_FILE, { chatIds, lastUpdateId });
   } catch (e) {
-    console.error('❌ Не удалось отправить отчёт в Telegram:', e.message);
-    if (e.cause) console.error('Причина:', e.cause);
-    process.exit(1);
+    console.error('⚠️ Не удалось обновить список подписчиков:', e.response?.data?.description || e.message);
+    // продолжаем с тем списком, что уже был сохранён ранее
+  }
+
+  // 2. Резервный получатель на случай, если список подписчиков ещё пуст
+  //    (например, самый первый запуск, никто ещё не писал /start)
+  const recipients = chatIds.length > 0 ? chatIds : (TELEGRAM_CHAT_ID ? [TELEGRAM_CHAT_ID] : []);
+
+  if (recipients.length === 0) {
+    console.warn('⚠️ Список получателей пуст – сообщение не отправлено');
+    return;
+  }
+
+  console.log(`Рассылаем отчёт ${recipients.length} получателям...`);
+  const results = await broadcastTelegramMessage(auth, text, recipients);
+
+  const failed = results.filter(r => !r.ok);
+  console.log(`✅ Разослано ${results.length - failed.length}/${results.length} получателям.`);
+  for (const f of failed) {
+    console.error(`❌ Не удалось отправить ${f.chatId}: ${f.error}`);
   }
 }
 

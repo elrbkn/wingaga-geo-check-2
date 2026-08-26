@@ -13,8 +13,10 @@
     "@faker-js/faker": "^8.4.1",
     "dotenv": "^16.4.5"
   },
-  "dependencies": {
+   "dependencies": {
     "patchright": "^1.61.1",
-    "undici": "^8.7.0"
+    "undici": "^8.7.0",
+    "axios": "^1.7.9",
+    "https-proxy-agent": "^7.0.6"
   }
 }
