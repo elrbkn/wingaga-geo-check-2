@@ -1,0 +1,37 @@
+name: Send Manual Telegram Message
+
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: 'Текст сообщения для рассылки подписчикам'
+        required: true
+        type: string
+
+jobs:
+  send-message:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create .env file
+        run: |
+          echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
+          echo "TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}" >> .env
+          echo "TELEGRAM_PROXY_URL=${{ secrets.TELEGRAM_PROXY_URL }}" >> .env
+
+      - name: Send message
+        run: node scripts/send-manual-message.js "${{ inputs.message }}"
