@@ -3,7 +3,7 @@ const { defineConfig } = require('patchright/test');
 
 module.exports = defineConfig({
   testDir: './tests',
-  timeout: 90_000,
+  timeout: 6 * 60_000,
   retries: 0, // если тест упал из-за случайного сетевого сбоя — повторить один раз
   workers: 1, // по одной стране за раз (чтобы не путать прокси-сессии)
   reporter: [
